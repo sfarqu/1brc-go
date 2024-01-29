@@ -62,6 +62,12 @@ public class CalculateAverage_baseline {
         // .collect(toMap(e -> e.getKey(), e -> Math.round(e.getValue() * 10.0) / 10.0)));
         // System.out.println(measurements1);
 
+        // Notes for a non-java dev: Java Collectors https://docs.oracle.com/javase/8/docs/api/java/util/stream/Collector.html
+        // Collector.of function takes the following:
+        // 1. A function that creates and returns a new container of the desired type
+        // 2. A function that folds a value into a mutable result container.
+        // 3. A function that accepts two partial results and merges them.
+        // 4. Perform the final transformation from the intermediate accumulation type A to the final result type R.
         Collector<Measurement, MeasurementAggregator, ResultRow> collector = Collector.of(
                 MeasurementAggregator::new,
                 (a, m) -> {

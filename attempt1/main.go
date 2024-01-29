@@ -1,4 +1,4 @@
-package main
+package attempt1
 
 import (
 	"bufio"
@@ -11,14 +11,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 const FILE = "data/measurements.txt"
-
-func main() {
-	ProcessFile()
-}
 
 // Measurement is a single temperature measurement
 type Measurement struct {
@@ -71,36 +66,31 @@ func (s StationStats) String() string {
 
 // Map of all weather stations
 type StatsMap struct {
-	data sync.Map
+	data map[string]StationStats
 }
 
-func (m *StatsMap) Set(new Measurement) {
-	s, _ := m.data.LoadOrStore(new.Station, NewStationStats())
-	stats := s.(StationStats)
+func (m StatsMap) Set(new Measurement) {
+	stats, ok := m.data[new.Station]
+	if !ok {
+		stats = NewStationStats()
+	}
 	stats.Min = math.Min(stats.Min, new.Value)
 	stats.Max = math.Max(stats.Max, new.Value)
 	stats.Sum = stats.Sum + new.Value
 	stats.Count = stats.Count + 1
-	m.data.Store(new.Station, stats)
+	m.data[new.Station] = stats
 }
 
-// v2: use sync pools for allocating buffers and strings that get created in loop
-// create gofunc to process each buffer read concurrently, and lines within the buffer
-// use sync map to prevent thread conflicts
-func ProcessFile() {
-	stats := StatsMap{}
+func Process() {
+	stats := StatsMap{
+		make(map[string]StationStats, 450),
+	}
 	f, err := os.Open(FILE)
 	if err != nil {
-		fmt.Println("cannot open file", err)
+		fmt.Println("cannot able to read the file", err)
 
 	}
 	defer f.Close()
-
-	bufferPool := sync.Pool{New: func() interface{} {
-		buffer := make([]byte, 512*1024)
-		return buffer
-	}}
-	var wg sync.WaitGroup
 
 	// read lines from file using buffered reader
 	r := bufio.NewReader(f)
@@ -108,7 +98,7 @@ func ProcessFile() {
 		// 4k buffer randomly because that was in the example I copy-pasted, but it works well because it is
 		// the same size as the internal buffer of r
 		// this code will create many buffers inside the loop which isn't great but that what iteration is for
-		buf := bufferPool.Get().([]byte)
+		buf := make([]byte, 4*1024)
 		n, err := r.Read(buf)
 		// exclude the final character (for some reason?)
 		buf = buf[:n]
@@ -125,53 +115,41 @@ func ProcessFile() {
 		}
 		// buffer might have stopped in the middle of a row so get rest of line
 		remainderOfLine, err := r.ReadBytes('\n')
-		n = len(remainderOfLine)
 
-		if n > 0 && err != io.EOF {
-			remainderOfLine = remainderOfLine[:n-1]
+		if err != io.EOF {
 			buf = append(buf, remainderOfLine...)
 		}
 
-		wg.Add(1)
-		go func() {
+		data := string(buf)
+		lines := strings.Split(data, "\n")
 
-			data := string(buf)
-			bufferPool.Put(buf)
-			lines := strings.Split(data, "\n")
-
-			// for each line, collate into stats for each station
-			for _, line := range lines {
-				if len(line) == 0 {
-					break
-				}
-				m, err := NewMeasurement(line)
-				// this is here for debugging to ensure data set is valid
-				if err != nil {
-					fmt.Println(err)
-					break
-				}
-				stats.Set(*m)
+		// for each line, collate into stats for each station
+		for _, line := range lines {
+			if len(line) == 0 {
+				break
 			}
-			wg.Done()
-		}()
-
+			m, err := NewMeasurement(line)
+			// this is here for debugging to ensure data set is valid
+			if err != nil {
+				fmt.Println(err)
+				break
+			}
+			stats.Set(*m)
+		}
 	}
-	wg.Wait()
 
 	// sort keys
-	keys := make([]string, 0, 10000)
+	keys := make([]string, 0, len(stats.data))
 
-	stats.data.Range(func(key interface{}, value interface{}) bool {
-		keys = append(keys, key.(string))
-		return true
-	})
+	for k := range stats.data {
+		keys = append(keys, k)
+	}
 	sort.Strings(keys)
 
 	// print in order
 	var buffer bytes.Buffer
 	for _, k := range keys {
-		v, _ := stats.data.Load(k)
-		buffer.WriteString(fmt.Sprintf("%s: %v ", k, v))
+		buffer.WriteString(fmt.Sprintf("%s: %v ", k, stats.data[k]))
 	}
 	fmt.Println(buffer.String())
 }

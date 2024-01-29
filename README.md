@@ -5,5 +5,5 @@ Attempted solution to One Billion Rows Challenge in Go. Data and resources are c
 | Attempt | Description                                                                                                  | Time    | Commit |
 |---------|--------------------------------------------------------------------------------------------------------------|---------|--------|
 | 0       | Naive implementation using 4K buffer on IO reader and inserting into a map. Sort keys before writing output. | 3:21.76 |        |
-|         |                                                                                                              |         |        |
+| 1       | Rough implementation of multithreading using sync.Map                                                        | 1:37.75 |        |
 
